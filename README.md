@@ -1,54 +1,81 @@
 # EdgeVision — Real-Time Video Stream Processing with OpenCV
 
-A React Native **CLI** app that captures a live camera stream, applies a
-**Canny edge-detection** effect to every frame in **native C++ using OpenCV**
-(grayscale → Gaussian blur → Canny), and renders the processed stream live and
-smoothly inside the app.
+A **React Native (CLI)** app that captures a live camera stream, applies a
+**Canny edge-detection** effect to **every frame in native C++ using OpenCV**
+(grayscale → Gaussian blur → Canny), and renders the processed stream back to
+the screen — live and smoothly — with an on-screen FPS counter.
 
-> **Both platforms implemented.** Android uses CameraX + JNI; iOS uses
-> AVFoundation + Objective-C++. Both share the **same C++/OpenCV core**
-> (`cpp/ImageProcessor.cpp`) and the **same JS layer**. See [iOS](#ios).
+**Repo:** https://github.com/Mehulbirare/Assignment---VideoStream-App
+
+> **Both platforms implemented.** Android uses **CameraX + JNI**; iOS uses
+> **AVFoundation + Objective-C++**. Both call the **same C++/OpenCV core**
+> (`cpp/ImageProcessor.cpp`) and are driven by the **same JS/TS layer** — one
+> source of truth for the image processing and one for the UI.
 
 ---
 
 ## Table of contents
 
-- [What it does](#what-it-does)
+- [Features](#features)
+- [Tech stack](#tech-stack)
 - [Architecture & frame pipeline](#architecture--frame-pipeline)
 - [How a processed frame reaches the screen](#how-a-processed-frame-reaches-the-screen)
+- [Approach & key design decisions](#approach--key-design-decisions)
 - [Project layout](#project-layout)
-- [Setup & running](#setup--running)
+- [Setup & running (Android)](#setup--running-android)
+- [Setup & running (iOS)](#setup--running-ios)
 - [Controls & states](#controls--states)
 - [Performance & threading](#performance--threading)
 - [Testing](#testing)
-- [iOS](#ios)
+- [Troubleshooting](#troubleshooting)
+- [What I'd improve / add with more time](#what-id-improve--add-with-more-time)
 - [Requirements checklist](#requirements-checklist)
 
 ---
 
-## What it does
+## Features
 
-- **Source:** the device camera as a real-time stream (CameraX `ImageAnalysis`).
-- **Permissions:** full lifecycle — granted / denied / blocked (never-ask-again),
-  with a "Open Settings" path for the blocked case.
-- **Processing:** per-frame **Canny** in native C++ (OpenCV):
-  `RGBA → grayscale → Gaussian blur → Canny → RGBA`. **No pixel work happens in
-  JavaScript.**
-- **Rendering:** the processed RGBA frame is blitted to a native `SurfaceView`.
-- **Controls (from React Native):** start/stop the stream, effect on/off toggle,
-  a real-time **effect switcher**, and front/back **camera flip**.
-- **Metrics overlay:** live **FPS**, **processing time per frame (ms)**, and
-  **dropped-frame** count.
-- **States:** `loading` (camera initializing) and `error`
-  (permission denied/blocked or processing failure).
+### Required
+
+- **Real-time camera source** — live video stream from the device camera.
+- **Permission handling** — full lifecycle: **granted / denied / blocked**
+  (never-ask-again), with an "Open Settings" path for the blocked case.
+- **Native C++ Canny** — per frame: `RGBA → grayscale → Gaussian blur → Canny`,
+  implemented with **OpenCV in native C++**. **No pixel work happens in JS.**
+- **Live rendering** — the processed frame is blitted to a native view
+  (`SurfaceView` on Android, `CALayer` on iOS).
+- **Controls from React Native** — start/stop the stream and an effect on/off
+  toggle.
+- **On-screen FPS counter** — so smoothness is measurable.
+- **States** — `loading` (camera initializing) and `error` (permission
+  denied/blocked or processing failure).
 
 ### Bonus implemented
 
-- ✅ Multiple effects + real-time switcher: Canny, Grayscale, Blur, Sepia, Cartoon.
-- ✅ Front/back camera switching (with selfie mirroring).
-- ✅ Processing-time-per-frame overlay + dropped-frame handling.
-- ✅ Threading: processing off the UI thread + backpressure handling.
-- ✅ Unit tests for the C++ effect logic (GoogleTest) **and** the JS layer (Jest).
+- ✅ **Multiple effects + real-time switcher** — Canny, Grayscale, Blur, Sepia,
+  Cartoon.
+- ✅ **Both Android and iOS** (shared C++ core).
+- ✅ **Front / back camera switching** (with selfie mirroring on the front cam).
+- ✅ **Processing-time-per-frame overlay + dropped-frame handling.**
+- ✅ **Threading** — processing runs off the UI thread, with backpressure.
+- ✅ **Unit tests for the C++ effect logic** (GoogleTest) **and** the JS layer
+  (Jest).
+
+> ⬜ **Not implemented:** record/save the processed output, and face detection.
+> See [What I'd improve](#what-id-improve--add-with-more-time).
+
+---
+
+## Tech stack
+
+| Layer       | Technology |
+| ----------- | ---------- |
+| App / UI    | React Native 0.73 (CLI), TypeScript |
+| Android cap | CameraX `ImageAnalysis` (Kotlin), custom `SurfaceView` |
+| iOS capture | AVFoundation `AVCaptureVideoDataOutput` (Objective-C++), `CALayer` |
+| Native core | C++17 + **OpenCV 4.x** (shared `cpp/ImageProcessor.cpp`) |
+| Bridge      | Android JNI; iOS `RCTViewManager` + `RCTBubblingEventBlock` |
+| Tests       | Jest + @testing-library/react-native; GoogleTest (C++) |
 
 ---
 
@@ -57,44 +84,39 @@ smoothly inside the app.
 ```
                           React Native (JavaScript / TypeScript)
  ┌───────────────────────────────────────────────────────────────────────────┐
- │  App.tsx  ── state machine: idle/loading/streaming/error                    │
- │    • useCameraPermission()  → granted | denied | blocked                    │
- │    • useFrameMetrics()      → fps / ms-per-frame / dropped                  │
- │    • Controls, EffectSwitcher, FpsOverlay, StatusOverlay                    │
- │                                                                             │
- │  <EdgeDetectionView effect isActive effectEnabled cameraFacing             │
- │                     onReady onFpsUpdate onError />   (props down, events up)│
+ │  App.tsx  ── state machine: idle / loading / streaming / error             │
+ │    • useCameraPermission()  → granted | denied | blocked                   │
+ │    • useFrameMetrics()      → fps / ms-per-frame / dropped                 │
+ │    • Controls, EffectSwitcher, FpsOverlay, StatusOverlay                   │
+ │                                                                            │
+ │  <EdgeDetectionView effect isActive effectEnabled cameraFacing            │
+ │                     onReady onFpsUpdate onError />  (props down, events up)│
  └───────────────┬───────────────────────────────────────────────────────────┘
-                 │  requireNativeComponent  (RN bridge / props + events)
- ┌───────────────▼───────────────────────────────────────────────────────────┐
- │  ANDROID NATIVE (Kotlin)                                                    │
- │  EdgeDetectionViewManager  ── maps props ↔ view, registers events          │
- │  EdgeDetectionView (FrameLayout + SurfaceView, custom LifecycleOwner)       │
- │    • CameraX ImageAnalysis (OUTPUT_IMAGE_FORMAT_RGBA_8888,                  │
- │      STRATEGY_KEEP_ONLY_LATEST)  → frames on a background executor          │
- │    • per frame: get direct RGBA ByteBuffer + rowStride                      │
- │    • NativeProcessor.nativeProcessFrame(in, stride, out, w, h, effect)      │
- │    • copyPixelsFromBuffer → Bitmap → blit to SurfaceView canvas             │
- │    • compute FPS / avg processing time / dropped frames → emit to JS        │
- └───────────────┬───────────────────────────────────────────────────────────┘
-                 │  JNI (zero-copy view over the camera buffer)
- ┌───────────────▼───────────────────────────────────────────────────────────┐
- │  NATIVE C++ (OpenCV)                                                        │
- │  native-lib.cpp  ── JNI entry, wraps buffer in cv::Mat (uses rowStride)     │
- │  ImageProcessor.cpp                                                         │
- │    cannyEdges():  RGBA→gray → GaussianBlur → Canny → RGBA                   │
- │    grayscale / gaussianBlur / sepia / cartoon                              │
- │    applyEffect(): dispatch by EffectType (kept in sync with TS enum)        │
- └───────────────────────────────────────────────────────────────────────────┘
+                 │  requireNativeComponent (RN bridge: props down, events up)
+ ┌───────────────▼─────────────────────────┐   ┌─────────────────────────────┐
+ │  ANDROID NATIVE (Kotlin)                 │   │  iOS NATIVE (Objective-C++) │
+ │  EdgeDetectionViewManager (props/events) │   │  EdgeDetectionViewManager   │
+ │  EdgeDetectionView                       │   │  EdgeDetectionView          │
+ │   • CameraX ImageAnalysis (RGBA_8888,    │   │   • AVCaptureVideoDataOutput│
+ │     KEEP_ONLY_LATEST) on bg executor     │   │     (BGRA) on serial queue  │
+ │   • direct RGBA ByteBuffer + rowStride   │   │   • CVPixelBuffer → cv::Mat │
+ │   • NativeProcessor.nativeProcessFrame() │   │   • ImageProcessor::apply…  │
+ │   • Bitmap → blit to SurfaceView         │   │   • CGImage → blit CALayer  │
+ │   • FPS / ms / dropped → emit to JS      │   │   • FPS / ms / dropped → JS │
+ └───────────────┬─────────────────────────┘   └──────────────┬──────────────┘
+                 │  JNI (zero-copy cv::Mat over buffer)        │  (direct C++ call)
+ ┌───────────────▼─────────────────────────────────────────────▼──────────────┐
+ │  SHARED NATIVE C++ (OpenCV)  —  cpp/ImageProcessor.cpp                       │
+ │    cannyEdges():  RGBA → gray → GaussianBlur → Canny → RGBA                  │
+ │    grayscale / gaussianBlur / sepia / cartoon                               │
+ │    applyEffect(EffectType): dispatch (enum kept in sync with the TS enum)    │
+ └─────────────────────────────────────────────────────────────────────────────┘
 ```
 
-**iOS mirrors this exact flow** with platform-native pieces: `RCTViewManager`
-instead of the Kotlin `ViewManager`, `AVCaptureVideoDataOutput` instead of
-CameraX, a `CGImage`/`CALayer` blit instead of `Bitmap`/`SurfaceView` — but the
-**OpenCV processing box is literally the same `cpp/ImageProcessor.cpp`** and the
-JS layer is unchanged.
-
 ## How a processed frame reaches the screen
+
+Using **Android** as the reference (iOS is identical in shape — see
+[iOS](#setup--running-ios)):
 
 1. **Capture.** CameraX `ImageAnalysis` is configured with
    `OUTPUT_IMAGE_FORMAT_RGBA_8888`, so each `ImageProxy` arrives already in RGBA
@@ -116,9 +138,40 @@ JS layer is unchanged.
 6. **Metrics.** Every ~1 s the view emits `onFpsUpdate { fps, processingTimeMs,
    droppedFrames }` to JS, which renders the on-screen overlay.
 
-Effect on/off and the effect switcher simply change the integer effect id sent
-down as a prop — the very next frame is processed differently. `effect = 0`
-(None) is a passthrough so "effect off" still shows the live camera.
+Effect on/off and the switcher simply change the integer effect id sent down as
+a prop — the **very next frame** is processed differently. `effect = 0` (None)
+is a passthrough, so "effect off" still shows the live camera.
+
+---
+
+## Approach & key design decisions
+
+- **Keep all per-pixel work in native C++.** JavaScript never touches frame
+  bytes. The bridge only carries small control props (down) and metric events
+  (up), so the RN/JS thread is never on the hot path.
+- **One shared C++ core for both platforms.** `cpp/ImageProcessor.cpp` is pure
+  OpenCV with zero Android/iOS dependencies. Android compiles it via CMake/NDK;
+  iOS compiles the same file in its target. This guarantees identical results,
+  halves the maintenance surface, and makes the effect logic **unit-testable on
+  a desktop** (no device/emulator needed).
+- **A single integer "effect contract."** The `EffectType` enum is defined
+  identically in TypeScript (`src/types/index.ts`) and C++
+  (`cpp/ImageProcessor.h`). JS sends the raw int across the bridge; a Jest test
+  asserts the two stay in sync. Simple, fast, and impossible to desync silently.
+- **Native view component, not a JS frame processor.** Capture → process →
+  render all happen natively and the result is drawn straight to a
+  `SurfaceView` / `CALayer`. This avoids round-tripping pixels through JS and
+  gives smooth, low-latency output. (A JSI/Skia frame processor is a great
+  alternative — see [improvements](#what-id-improve--add-with-more-time).)
+- **Backpressure by dropping, not queuing.** CameraX `KEEP_ONLY_LATEST` plus an
+  `AtomicBoolean` "busy" guard means a slow frame never backs up a queue; we
+  drop and count it. Latency stays bounded and memory flat.
+- **Allocate once, reuse forever.** The output buffer and `Bitmap` are sized to
+  the frame and reused, and the input `cv::Mat` is a zero-copy view over the
+  camera buffer — minimal per-frame allocation/GC pressure.
+- **Metrics measured natively.** FPS, average processing time, and dropped
+  frames reflect the *native* render loop (where the work happens), not the JS
+  bridge, so the numbers are honest.
 
 ---
 
@@ -127,11 +180,12 @@ down as a prop — the very next frame is processed differently. `effect = 0`
 ```
 .
 ├── index.js, app.json, package.json        # RN CLI entry + config
+├── metro.config.js                          # includes the @/ path-alias resolver
 ├── src/
 │   ├── App.tsx                             # UI state machine
 │   ├── types/index.ts                      # EffectType enum (native contract)
 │   ├── constants/effects.ts               # effect list + default
-│   ├── native/EdgeDetectionView.tsx       # typed wrapper over native view
+│   ├── native/EdgeDetectionView.tsx       # typed wrapper over the native view
 │   ├── hooks/
 │   │   ├── useCameraPermission.ts         # granted/denied/blocked lifecycle
 │   │   └── useFrameMetrics.ts             # holds native metrics
@@ -142,6 +196,7 @@ down as a prop — the very next frame is processed differently. `effect = 0`
 │   ├── ImageProcessor.h                     #   (compiled into BOTH platforms)
 │   └── ImageProcessor.cpp                   #   pure OpenCV effects (unit-tested)
 ├── android/
+│   ├── gradlew, gradlew.bat, gradle/        # Gradle wrapper (committed)
 │   └── app/src/main/
 │       ├── java/com/edgevision/
 │       │   ├── MainApplication.kt, MainActivity.kt
@@ -158,18 +213,20 @@ down as a prop — the very next frame is processed differently. `effect = 0`
 │       └── EdgeDetection/
 │           ├── EdgeDetectionView.{h,mm}    # AVFoundation capture + render
 │           └── EdgeDetectionViewManager.mm # RCTViewManager -> shared core
-└── TEST_CASES.md                           # manual + automated test plan
+└── TEST_CASES.md                           # full manual + automated test plan
 ```
 
 ---
 
-## Setup & running
+## Setup & running (Android)
 
 ### Prerequisites
 
-- Node ≥ 18, JDK 17, Android SDK + **NDK 25.x**, CMake 3.22.
-- A physical Android device (recommended for real FPS) or an emulator with a
-  virtual/webcam camera.
+- **Node ≥ 18** and **JDK 17**
+- **Android SDK** + **NDK 25.x** + **CMake 3.22** (install via Android Studio →
+  SDK Manager → SDK Tools)
+- A physical device (best for real FPS) or an emulator with a camera
+  (set the AVD's *Back camera* to **Webcam0** or **VirtualScene**)
 
 ### 1) Install JS dependencies
 
@@ -177,124 +234,89 @@ down as a prop — the very next frame is processed differently. `effect = 0`
 npm install
 ```
 
-### 2) Add the OpenCV Android SDK
+### 2) Point Gradle at your Android SDK
 
-OpenCV is large and not committed. Download the **OpenCV Android SDK** (4.x) from
-<https://opencv.org/releases/> and unpack it so the CMake config resolves:
+Create `android/local.properties` (git-ignored, machine-specific):
+
+```properties
+# Windows
+sdk.dir=C:/Users/<you>/AppData/Local/Android/Sdk
+# macOS:  sdk.dir=/Users/<you>/Library/Android/sdk
+# Linux:  sdk.dir=/home/<you>/Android/Sdk
+```
+
+(Or set the `ANDROID_HOME` environment variable instead.)
+
+### 3) Add the OpenCV Android SDK (one-time, ~300 MB)
+
+OpenCV is large and not committed. Download the **OpenCV Android SDK 4.x** from
+<https://opencv.org/releases/> (this project was built against **4.10.0**) and
+unpack it so this path exists:
 
 ```
 android/opencv/sdk/native/jni/OpenCVConfig.cmake
 ```
 
-i.e. place the SDK at `android/opencv/`. The path is wired through
-`android/gradle.properties` (`opencvSdkPath=../opencv/sdk/native/jni`) into
-`app/build.gradle` → CMake (`-DOpenCV_DIR=...`). To use a different location,
+i.e. place the SDK folder at `android/opencv/`. The path is wired through
+`android/gradle.properties` (`opencvSdkPath`) into `app/build.gradle` → CMake
+(`-DOpenCV_DIR=...`, resolved to an absolute path). To use a different location,
 override `opencvSdkPath` in `android/local.properties`.
 
-> The SDK ships static OpenCV libs that are linked directly into
-> `libedgevision.so`, so no extra `.so` needs to be bundled.
-
-### 3) Generate the Gradle wrapper (first checkout only)
-
-The binary `gradle-wrapper.jar` is not committed. From `android/`:
-
-```bash
-gradle wrapper --gradle-version 8.3
-```
-
-(or open the `android/` folder once in Android Studio, which generates it).
+> The OpenCV SDK's prebuilt native libraries are linked by CMake and packaged
+> into the app automatically — nothing else to copy.
 
 ### 4) Run
 
 ```bash
-npm start            # Metro bundler
-npm run android      # build + install on device/emulator
+npm start            # terminal 1: Metro bundler
+npm run android      # terminal 2: build + install + launch
 ```
+
+> The **first** build compiles OpenCV + the C++ pipeline for each ABI and can
+> take several minutes; subsequent builds are seconds. The Gradle wrapper and a
+> debug keystore are committed, so no extra signing setup is needed.
 
 Grant the camera permission when prompted, then tap the shutter to start.
 
----
-
-## Controls & states
-
-| Control            | Behaviour                                                       |
-| ------------------ | -------------------------------------------------------------- |
-| Shutter button     | Start / stop the stream                                         |
-| **Effect** switch  | Effect on/off (off = passthrough live preview)                 |
-| Effect chips       | Real-time switch: Canny, Grayscale, Blur, Sepia, Cartoon       |
-| **Flip**           | Front / back camera                                            |
-
-**States**
-
-- **loading** — overlay + spinner while CameraX and the pipeline initialize
-  (cleared by the native `onReady` event after the first rendered frame).
-- **error** — permission denied/blocked, camera init/bind failure, or a native
-  processing error (surfaced via `onError`), with a Retry / Open Settings action.
+If `npm run android` can't find `gradlew`, see [Troubleshooting](#troubleshooting).
 
 ---
 
-## Performance & threading
+## Setup & running (iOS)
 
-- **Off the UI thread:** all capture, JNI, OpenCV, and the surface blit run on a
-  single-threaded `cameraExecutor`; the JS/UI thread only handles props/events.
-- **Backpressure:** CameraX `KEEP_ONLY_LATEST` + an `AtomicBoolean` guard drop
-  frames rather than queue them; drops are counted and shown.
-- **Zero/low copy:** the camera buffer is wrapped directly as a `cv::Mat`; the
-  output buffer and `Bitmap` are allocated once and reused.
-- **Tunables:** analysis resolution (`ANALYSIS_WIDTH/HEIGHT`) and Canny
-  thresholds / blur kernel (defaults in `ImageProcessor`) trade quality vs FPS.
+iOS is implemented in Objective-C++ and **reuses the exact same C++ core** and JS
+layer as Android:
 
----
-
-## Testing
-
-See **[TEST_CASES.md](TEST_CASES.md)** for the full manual + automated plan.
-
-```bash
-# JS layer (hooks, components, native contract)
-npm test
-
-# C++ effect logic (desktop OpenCV + GoogleTest; no device needed)
-npm run test:native
-```
-
----
-
-## iOS
-
-iOS is implemented natively in Objective-C++ and **reuses the exact same C++
-core** (`cpp/ImageProcessor.cpp`) and JS layer as Android:
-
-- `ios/EdgeVision/EdgeDetection/EdgeDetectionView.mm` — an `AVCaptureSession`
-  with `AVCaptureVideoDataOutput` (BGRA, `alwaysDiscardsLateVideoFrames` for
+- `ios/.../EdgeDetectionView.mm` — an `AVCaptureSession` with
+  `AVCaptureVideoDataOutput` (BGRA, `alwaysDiscardsLateVideoFrames` for
   backpressure) delivers frames on a **dedicated serial queue**. Each
   `CVPixelBuffer` is wrapped in a `cv::Mat`, converted BGRA→RGBA, run through
   `ImageProcessor::applyEffect`, turned into a `CGImage`, and blitted onto a
-  `CALayer` on the main thread. Orientation/mirroring is handled on the capture
-  connection. FPS / processing-time / dropped-frame metrics and errors are
-  emitted to JS via `RCTBubblingEventBlock` (same event names as Android).
-- `ios/EdgeVision/EdgeDetection/EdgeDetectionViewManager.mm` — an
-  `RCTViewManager` exporting the view as `"EdgeDetectionView"`, so the same
-  `src/native/EdgeDetectionView.tsx` wrapper drives both platforms unchanged.
+  `CALayer` on the main thread. Metrics/errors are emitted via
+  `RCTBubblingEventBlock` (same event names as Android).
+- `ios/.../EdgeDetectionViewManager.mm` — an `RCTViewManager` exporting the view
+  as `"EdgeDetectionView"`, so the same `src/native/EdgeDetectionView.tsx`
+  wrapper drives both platforms unchanged.
 - Camera permission (`NSCameraUsageDescription` in `Info.plist`) is requested
-  natively; denial/restriction surfaces as an `onError` → the JS error overlay.
+  natively; denial surfaces as `onError` → the JS error overlay.
 
-### iOS setup
+### iOS setup steps
 
 `react-native init` normally generates the Xcode project; this repo ships the
-source + config (parallel to Android shipping source but not the Gradle wrapper
-jar / OpenCV SDK). To get a buildable workspace:
+iOS **source + config** (the same way Android ships source but not the OpenCV
+SDK). To get a buildable workspace on a Mac:
 
-1. **Generate the Xcode project** (one-time). Either open `ios/` in Xcode, or
-   generate a matching template and keep this repo's `ios/EdgeVision/*` sources:
+1. **Generate the Xcode project** (one-time), keeping this repo's
+   `ios/EdgeVision/*` sources:
    ```bash
-   npx @react-native-community/cli@13 init EdgeVision --version 0.73.6 --skip-install --directory /tmp/EdgeVisionTemplate
+   npx @react-native-community/cli@13 init EdgeVision --version 0.73.6 \
+       --skip-install --directory /tmp/EdgeVisionTemplate
    cp -R /tmp/EdgeVisionTemplate/ios/EdgeVision.xcodeproj ios/
    ```
 2. **Add native files to the target.** In Xcode, add the `EdgeDetection/` group
    and `cpp/ImageProcessor.cpp` to the `EdgeVision` target.
-3. **Header search path.** Add `$(SRCROOT)/../cpp` to *Header Search Paths* so
-   `#import "ImageProcessor.h"` resolves; ensure *C++ Language Dialect* = C++17.
+3. **Header search path.** Add `$(SRCROOT)/../cpp` to *Header Search Paths*;
+   ensure *C++ Language Dialect* = `C++17`.
 4. **OpenCV.** Keep `pod 'OpenCV'` in the `Podfile`, or drop in
    `opencv2.framework` (see the comment in the Podfile).
 5. Install pods and run:
@@ -305,23 +327,131 @@ jar / OpenCV SDK). To get a buildable workspace:
 
 ---
 
+## Controls & states
+
+| Control            | Behaviour                                                 |
+| ------------------ | -------------------------------------------------------- |
+| Shutter button     | Start / stop the stream                                   |
+| **Effect** switch  | Effect on/off (off = passthrough live preview)           |
+| Effect chips       | Real-time switch: Canny, Grayscale, Blur, Sepia, Cartoon |
+| **Flip**           | Front / back camera                                       |
+
+**States**
+
+- **loading** — overlay + spinner while the camera and pipeline initialize
+  (cleared by the native `onReady` event after the first rendered frame).
+- **error** — permission denied/blocked, camera init/bind failure, or a native
+  processing error (via `onError`), with a Retry / Open Settings action.
+
+---
+
+## Performance & threading
+
+- **Off the UI thread:** capture, JNI, OpenCV, and the blit run on a dedicated
+  worker (`cameraExecutor` on Android, a serial `dispatch_queue` on iOS); the
+  JS/UI thread only handles props/events.
+- **Backpressure:** `KEEP_ONLY_LATEST` / `alwaysDiscardsLateVideoFrames` plus a
+  busy-guard drop frames rather than queue them; drops are counted and shown.
+- **Low/zero copy:** the camera buffer is a zero-copy `cv::Mat` view; the output
+  buffer and `Bitmap` are allocated once and reused.
+- **Tunables:** analysis resolution (`ANALYSIS_WIDTH/HEIGHT` in
+  `EdgeDetectionView`) and the Canny thresholds / blur kernel (defaults in
+  `ImageProcessor`) trade quality vs FPS.
+
+---
+
+## Testing
+
+Full plan in **[TEST_CASES.md](TEST_CASES.md)** (automated + manual).
+
+```bash
+npm test            # JS layer: hooks, components, native enum contract (Jest)
+npm run tsc         # TypeScript typecheck
+npm run lint        # ESLint
+npm run test:native # C++ effect logic: GoogleTest + desktop OpenCV (no device)
+```
+
+- **JS (Jest):** 10 cases — effect config, the TS↔C++ enum contract,
+  `useFrameMetrics` rounding/reset, `EffectSwitcher` behavior.
+- **C++ (GoogleTest):** 12 cases — Canny dimensions/type, edge detection on a
+  synthetic square, blank-image → no edges, threshold monotonicity, grayscale
+  channel equality, blur kernel normalization, sepia/cartoon shape, dispatch.
+
+> `npm run test:native` needs desktop OpenCV (`brew install opencv` /
+> `apt install libopencv-dev` / `vcpkg install opencv4`).
+
+---
+
+## Troubleshooting
+
+Issues commonly hit on a fresh machine (all resolved in this repo's config):
+
+| Symptom | Cause / fix |
+| ------- | ----------- |
+| `'gradlew.bat' is not recognized` | Run Gradle from the `android/` folder (`cd android && .\gradlew.bat ...`). The wrapper **is** committed; this is a CLI-from-root quirk on Windows. |
+| CMake: `Could not find ... OpenCVConfig.cmake` | The OpenCV SDK isn't at `android/opencv/sdk/native/jni`. See [step 3](#3-add-the-opencv-android-sdk-one-time-300-mb). `OpenCV_DIR` must be **absolute** (already handled in `app/build.gradle`). |
+| App shows **Unable to load script** + `socket failed: EPERM` | Missing `INTERNET` permission (present in this repo) — rebuild. |
+| `CLEARTEXT communication ... not permitted` | The debug build needs `usesCleartextTraffic` (provided via `android/app/src/debug/AndroidManifest.xml`). |
+| Metro: `Unable to resolve module @/...` | The `@/` path alias needs a Metro resolver — configured in `metro.config.js`. Restart Metro with `--reset-cache` after changing it. |
+| `EADDRINUSE :::8081` | A Metro is already running. Kill it: PowerShell `Stop-Process -Id (Get-NetTCPConnection -LocalPort 8081 -State Listen).OwningProcess -Force`. |
+| Emulator shows a black/!  preview | Set the AVD camera to **Webcam0**/**VirtualScene** in the emulator's settings. |
+| Installed APK can't reach Metro on a device | `adb reverse tcp:8081 tcp:8081`. |
+
+---
+
+## What I'd improve / add with more time
+
+**Finish the remaining bonuses**
+
+- **Record / save the processed output** — on Android, encode the processed
+  frames with `MediaCodec` + `MediaMuxer` (or render to an input `Surface`); on
+  iOS, `AVAssetWriter`. Add a record button + share sheet.
+- **Face detection effect** — ML Kit / Vision face detector (or OpenCV Haar/DNN)
+  with overlay boxes, exposed as another `EffectType`.
+
+**Performance / rendering**
+
+- **GPU rendering path** — upload the processed frame to an OpenGL ES texture
+  (`TextureView`/`GLSurfaceView`) on Android and a Metal/`CAMetalLayer` view on
+  iOS, removing the per-frame `Bitmap`/`CGImage` allocation and CPU blit.
+- **GPU OpenCV** — run the pipeline through OpenCV's T-API/OpenCL (or shader
+  Sobel/Canny) to push well past current FPS on high-res frames.
+- **Adaptive quality** — auto-tune analysis resolution / Canny thresholds from
+  the live FPS to hold a target frame rate on weaker devices.
+- **New Architecture (Fabric + JSI)** — a Fabric native component and/or a
+  vision-camera-style **JSI frame processor** to remove the legacy bridge and
+  share buffers without copies.
+
+**Robustness & polish**
+
+- **Commit a generated iOS Xcode project** (e.g. via XcodeGen) so iOS is also
+  one-command, and **add CI** (GitHub Actions) running Jest, the C++ GoogleTests,
+  and a Gradle `assembleDebug` on every push.
+- **Camera UX** — pinch-to-zoom, tap-to-focus, exposure control, and persisted
+  user settings (last effect / camera).
+- **A small download script** for the OpenCV SDK, and on-device **benchmarks**
+  across a few resolutions/devices documented in the README.
+
+---
+
 ## Requirements checklist
 
 | Requirement                                            | Status |
 | ------------------------------------------------------ | :----: |
 | Real-time camera stream                                |   ✅   |
-| Permission handling (granted/denied/blocked)           |   ✅   |
+| Permission handling (granted / denied / blocked)       |   ✅   |
 | Canny in native C++ (gray → blur → Canny), not JS      |   ✅   |
-| Live, smooth rendering via native view                 |   ✅   |
+| Live, smooth rendering via a native view               |   ✅   |
 | Start/stop + effect on/off from React Native           |   ✅   |
 | On-screen FPS counter                                  |   ✅   |
 | Loading & error states                                 |   ✅   |
-| README (pipeline + how frames reach the screen)        |   ✅   |
-| Bonus: multiple effects + switcher                     |   ✅   |
-| Bonus: front/back camera                               |   ✅   |
-| Bonus: processing-time + dropped-frame handling        |   ✅   |
-| Bonus: threading + backpressure                        |   ✅   |
-| Bonus: C++ unit tests                                  |   ✅   |
+| README (setup, approach, pipeline, improvements)       |   ✅   |
+| Bonus: multiple effects + real-time switcher           |   ✅   |
 | Bonus: both platforms (Android + iOS)                  |   ✅   |
-| Bonus: record/save output                              |  ⬜ (not implemented) |
+| Bonus: front/back camera switching                     |   ✅   |
+| Bonus: processing-time overlay + dropped-frame handling|   ✅   |
+| Bonus: threading off UI thread + backpressure          |   ✅   |
+| Bonus: C++ unit tests                                  |   ✅   |
+| Bonus: record/save output                              |   ⬜   |
+| Bonus: face detection                                  |   ⬜   |
 ```
