@@ -1,0 +1,12 @@
+<manifest xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:tools="http://schemas.android.com/tools">
+
+    <!-- Debug-only: allow cleartext HTTP so the app can load the JS bundle
+         from the Metro dev server (e.g. http://10.0.2.2:8081). Not included
+         in release builds. -->
+    <application
+        android:usesCleartextTraffic="true"
+        tools:targetApi="28"
+        tools:ignore="GoogleAppIndexingWarning"
+        tools:node="merge" />
+</manifest>

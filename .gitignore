@@ -1,0 +1,55 @@
+# OSX
+.DS_Store
+
+# Node
+node_modules/
+npm-debug.log
+yarn-error.log
+package-lock.json.bak
+
+# Build outputs
+build/
+dist/
+
+# Android
+android/.gradle/
+android/.kotlin/
+android/app/build/
+android/build/
+android/app/.cxx/
+.cxx/
+android/local.properties
+android/.idea/
+android/captures/
+*.iml
+*.hprof
+*.keystore
+!debug.keystore
+# OpenCV SDK is large (~300MB); download it locally (see README "Setup")
+android/opencv/
+android/app/src/main/jniLibs/
+
+# Android build artifacts
+*.apk
+*.aab
+*.ap_
+*.dex
+
+# iOS
+ios/Pods/
+ios/build/
+ios/*.xcworkspace/xcuserdata/
+*.xcuserstate
+*.jsbundle
+
+# Metro / Jest
+.metro-health-check*
+coverage/
+
+# Misc
+.env
+*.log
+.vscode/
+
+# IDE
+.idea/

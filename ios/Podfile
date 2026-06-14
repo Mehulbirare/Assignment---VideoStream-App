@@ -1,0 +1,41 @@
+# Resolve react-native + Hermes from node_modules.
+require_relative '../node_modules/react-native/scripts/react_native_pods'
+require_relative '../node_modules/@react-native-community/cli-platform-ios/native_modules'
+
+platform :ios, min_ios_version_supported
+prepare_react_native_project!
+
+target 'EdgeVision' do
+  config = use_native_modules!
+
+  use_react_native!(
+    :path => '../node_modules/react-native',
+    # Hermes is enabled by default.
+    :app_path => "#{Pod::Config.instance.installation_root}/.."
+  )
+
+  # OpenCV for iOS.
+  # Option A (recommended): use the CocoaPods spec.
+  pod 'OpenCV', '~> 4.3.0'
+  #
+  # Option B: if the pod is unavailable, download opencv2.framework from
+  # https://opencv.org/releases/ (iOS pack) and drag it into the Xcode target
+  # under "Frameworks, Libraries, and Embedded Content", then remove the line
+  # above. See README "iOS setup".
+
+  post_install do |installer|
+    react_native_post_install(
+      installer,
+      config[:reactNativePath],
+      :mac_catalyst_enabled => false
+    )
+
+    # The shared C++ core (cpp/ImageProcessor.cpp) and our .mm files need
+    # C++17 and the shared header on the search path.
+    installer.pods_project.targets.each do |t|
+      t.build_configurations.each do |bc|
+        bc.build_settings['CLANG_CXX_LANGUAGE_STANDARD'] = 'c++17'
+      end
+    end
+  end
+end

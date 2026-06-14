@@ -1,0 +1,25 @@
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    android:width="108dp"
+    android:height="108dp"
+    android:viewportWidth="108"
+    android:viewportHeight="108">
+    <!-- Background -->
+    <path
+        android:fillColor="#0B0D10"
+        android:pathData="M0,0h108v108H0z" />
+    <!-- Camera lens (outer) -->
+    <path
+        android:fillColor="#3D8BFF"
+        android:pathData="M54,28m-26,0a26,26 0,1 0,52 0a26,26 0,1 0,-52 0" />
+    <!-- Camera lens (inner cutout) -->
+    <path
+        android:fillColor="#0B0D10"
+        android:pathData="M54,28m-13,0a13,13 0,1 0,26 0a13,13 0,1 0,-26 0" />
+    <!-- Edge-detection scan lines -->
+    <path
+        android:fillColor="#5DFF8F"
+        android:pathData="M26,74h56v5h-56z" />
+    <path
+        android:fillColor="#5DFF8F"
+        android:pathData="M34,84h40v5h-40z" />
+</vector>
